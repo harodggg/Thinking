@@ -47,11 +47,18 @@ jobs:
             cp "${{ github.workspace }}/README.md" content/index.md
           fi
 
-          sed -i 's|baseUrl: "quartz.jzhao.xyz"|baseUrl: "harodggg.github.io/thinking"|g' quartz.config.ts
-          printf '\n.page-title, body[data-slug="index"] .article-title { display: none; }\n' >> quartz/styles/custom.scss
+          # 自动定位 Quartz 5 配置文件并替换站点根路径
+          grep -rl --exclude-dir=node_modules --exclude-dir=.git "quartz.jzhao.xyz" . | xargs -r sed -i 's|quartz.jzhao.xyz|harodggg.github.io/thinking|g'
+
+          # 自动定位样式文件并隐藏左上角 "Quartz 5" 与首页 "index" 大标题
+          TARGET_SCSS=$(find . -maxdepth 4 \( -name "custom.scss" -o -name "base.scss" \) -not -path "*/node_modules/*" | head -n 1)
+          if [ -n "$TARGET_SCSS" ]; then
+            printf '\n.page-title, body[data-slug="index"] .article-title { display: none !important; }\n' >> "$TARGET_SCSS"
+          fi
 
           npx quartz build
 
+          # 为 GitHub Pages 下的中文/特殊符号无后缀链接自动补全 .html 跳转
           node -e 'const fs=require("fs");if(fs.existsSync("public/404.html")){let h=fs.readFileSync("public/404.html","utf8");h=h.replace("<head>",`<head><script>if(!location.pathname.endsWith(".html")&&!location.pathname.endsWith("/")){location.replace(location.pathname+".html"+location.search+location.hash);}</script>`);fs.writeFileSync("public/404.html",h);}'
 
       - name: Upload Pages artifact
