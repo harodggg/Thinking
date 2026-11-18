@@ -37,32 +37,22 @@ jobs:
       - name: Build site with Quartz
         run: |
           git clone --depth 1 https://github.com/jackyzha0/quartz.git /tmp/quartz
-      [118;1:3u    cd /tmp/quartz
+          cd /tmp/quartz
           npm ci
 
           rm -rf content/*
           cp -r "${{ github.workspace }}/thinking/"* content/
 
-          # 若笔记库根目录没有 index.md，自动用仓库 README.md 作为首页
           if [ ! -f content/index.md ] && [ -f "${{ github.workspace }}/README.md" ]; then
             cp "${{ github.workspace }}/README.md" content/index.md
           fi
 
-          # 修正站点根路径为仓库子路径
           sed -i 's|baseUrl: "quartz.jzhao.xyz"|baseUrl: "harodggg.github.io/thinking"|g' quartz.config.ts
+          printf '\n.page-title, body[data-slug="index"] .article-title { display: none; }\n' >> quartz/styles/custom.scss
 
           npx quartz build
 
-          # 为 GitHub Pages 下的中文/特殊符号无后缀链接自动补全 .html 跳转
-          node -e '
-            const fs = require("fs");
-            if (fs.existsSync("public/404.html")) {
-              let html = fs.readFileSync("public/404.html", "utf8");
-              const redirect = `<script>if(!location.pathname.endsWith(".html")&&!location.pathname.endsWith("/")){location.replace(location.pathname+".html"+location.search+location.hash);}</script>`;
-              html = html.replace("<head>", "<head>" + redirect);
-              fs.writeFileSync("public/404.html", html);
-            }
-          '
+          node -e 'const fs=require("fs");if(fs.existsSync("public/404.html")){let h=fs.readFileSync("public/404.html","utf8");h=h.replace("<head>",`<head><script>if(!location.pathname.endsWith(".html")&&!location.pathname.endsWith("/")){location.replace(location.pathname+".html"+location.search+location.hash);}</script>`);fs.writeFileSync("public/404.html",h);}'
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
