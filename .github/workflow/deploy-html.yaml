@@ -1,0 +1,57 @@
+name: Publish Notes to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout vault repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build site with Quartz
+        run: |
+          git clone --depth 1 https://github.com/jackyzha0/quartz.git /tmp/quartz
+          cd /tmp/quartz
+          npm ci
+
+          rm -rf content/*
+          cp -r "${{ github.workspace }}/thinking/"* content/
+
+          # 若笔记库根目录没有 index.md，自动用仓库 README.md 作为网站首页
+          if [ ! -f content/index.md ] && [ -f "${{ github.workspace }}/README.md" ]; then
+            cp "${{ github.workspace }}/README.md" content/index.md
+          fi
+
+          npx quartz build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: /tmp/quartz/public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
