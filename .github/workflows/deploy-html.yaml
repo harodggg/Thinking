@@ -47,19 +47,62 @@ jobs:
             cp "${{ github.workspace }}/README.md" content/index.md
           fi
 
-          # 自动定位 Quartz 5 配置文件并替换站点根路径
-          grep -rl --exclude-dir=node_modules --exclude-dir=.git "quartz.jzhao.xyz" . | xargs -r sed -i 's|quartz.jzhao.xyz|harodggg.github.io/thinking|g'
-
-          # 自动定位样式文件并隐藏左上角 "Quartz 5" 与首页 "index" 大标题
-          TARGET_SCSS=$(find . -maxdepth 4 \( -name "custom.scss" -o -name "base.scss" \) -not -path "*/node_modules/*" | head -n 1)
-          if [ -n "$TARGET_SCSS" ]; then
-            printf '\n.page-title, body[data-slug="index"] .article-title { display: none !important; }\n' >> "$TARGET_SCSS"
-          fi
+          # 1. 修正 baseUrl 为首字母大写的实际仓库路径 Thinking
+          grep -rl --exclude-dir=node_modules --exclude-dir=.git "quartz.jzhao.xyz" . | xargs -r sed -i 's|quartz.jzhao.xyz|harodggg.github.io/Thinking|g'
 
           npx quartz build
 
-          # 为 GitHub Pages 下的中文/特殊符号无后缀链接自动补全 .html 跳转
-          node -e 'const fs=require("fs");if(fs.existsSync("public/404.html")){let h=fs.readFileSync("public/404.html","utf8");h=h.replace("<head>",`<head><script>if(!location.pathname.endsWith(".html")&&!location.pathname.endsWith("/")){location.replace(location.pathname+".html"+location.search+location.hash);}</script>`);fs.writeFileSync("public/404.html",h);}'
+          # 2. 直接对编译产出的 public/ 静态文件做后处理
+          node - << 'EOF'
+          const fs = require("fs");
+          const path = require("path");
+
+          const patchScript = `<script>
+          (function(){
+            const origFetch = window.fetch;
+            window.fetch = function(input, init) {
+              try {
+                const raw = typeof input === "string" ? input : input.url;
+                const u = new URL(raw, location.href);
+                if (u.origin === location.origin && !u.pathname.endsWith("/") && !/\\.[a-zA-Z0-9]+$/.test(u.pathname)) {
+                  u.pathname += ".html";
+                  input = typeof input === "string" ? u.toString() : new Request(u.toString(), input);
+                }
+              } catch (e) {}
+              return origFetch.call(this, input, init);
+            };
+          })();
+          </script>`;
+
+          function walk(dir) {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const full = path.join(dir, entry.name);
+              if (entry.isDirectory()) {
+                walk(full);
+              } else if (entry.name.endsWith(".html")) {
+                let html = fs.readFileSync(full, "utf8");
+                // 移除所有页面左上角的 "Quartz 5" 站点标题
+                html = html.replace(/<h2[^>]*>\s*<a[^>]*>\s*Quartz 5\s*<\/a>\s*<\/h2>/g, "");
+                // 仅在首页隐藏自动生成的 "index" 大标题
+                if (full === path.join("public", "index.html")) {
+                  html = html.replace(/<h1([^>]*)>\s*index\s*<\/h1>/, '<h1$1 style="display:none">index</h1>');
+                }
+                // 注入 SPA fetch 自动补全 .html 钩子
+                html = html.replace("<head>", "<head>" + patchScript);
+                fs.writeFileSync(full, html);
+              }
+            }
+          }
+
+          walk("public");
+
+          if (fs.existsSync("public/404.html")) {
+            let h404 = fs.readFileSync("public/404.html", "utf8");
+            const redirect = `<script>if(!location.pathname.endsWith("/")&&!/\\.[a-zA-Z0-9]+$/.test(location.pathname)){location.replace(location.pathname+".html"+location.search+location.hash);}</script>`;
+            h404 = h404.replace("<head>", "<head>" + redirect);
+            fs.writeFileSync("public/404.html", h404);
+          }
+          EOF
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
