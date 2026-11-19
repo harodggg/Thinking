@@ -1,0 +1,11 @@
+# 多端分发脚本生成的输出产物
+dist/
+
+# Obsidian 本地窗口布局与光标状态（避免每次打开笔记都产生无意义 diff）
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+
+# macOS 与 Python 缓存
+.DS_Store
+__pycache__/
+*.py[cod]
